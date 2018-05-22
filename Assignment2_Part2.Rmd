@@ -9,6 +9,17 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r}
+getwd()
+locpath= getwd()
+setwd(locpath)
+
+library(pacman)
+p_load(plyr, dplyr, stringr, tidyverse, tidyr, ggplot2, pastecs, lmerTest, MuMIn, lme4, modelr, Metrics, caret, ddalpha, ggplot2, pastecs, crqa, lmerTest, pROC, modelr) # choose n (y/n?) in ddalpha
+library(rethinking)
+```
+
 ## In this assignment we learn how to assess rates from a binomial distribution, using the case of assessing your teachers' knowledge of CogSci.
 
 ### Second part: Focusing on predictions
@@ -17,7 +28,38 @@ Last year you assessed the teachers (darned time runs quick!). Now you want to r
 
 Questions to be answered (but see guidance below):
 1- Write a paragraph discussing how assessment of prediction performance is different in Bayesian vs. frequentist models
+####
+When asssesing a model we look at three different measures (maybe other word):
+The structure of the model (values and robustness), the model's predictions, and the robustness of the model. 
+In frequentist statistics, when looking at the structure of the model, we look at the beta values, the std. error (SE) and the p value. Meanwhile in Bayesian statistics we look at the posterior of the parameters. When asessing the predictions of the model in frequentist statistics we look at the residuals and the RMSE (average error/distance predicted by the model to the actual data. The standard deviation of the residuals).Meanwhile in Bayesian statistics we look at the predictive posterior (which we can use to search for biases both in the fitted data as well as in new data) (somthing about samples). 
+"det er noget med at i frequentist får man en 'prediction', altså vores model forudsiger noget bestemt, hvorimod Bayesian forudsiger en probability distribution af forskellige values. Altså, hvor sandsynligt det er, at hver værdi sker."
+When asessing the robustness of the model 
+#####
+
+FROM SLIDES; NR 5 
+#####
+A model should be assessed:
+Looking at its structure (values and robustness)
+Beta values, SE, p?
+Here Posterior (of the parameters)
+
+Looking at its predictions
+Residuals/ROC/RMSE;
+Predictive Posterior (of the outcome)
+Either searching for biases on the fitted data
+Or searching for biases on new data
+
+Robustness of the model
+e.g. cross-validated parameters
+here different priors
+Comparative cross-validation based information criteria
+
+######
+
+ 
 2- Provide at least one plot and one written line discussing prediction errors for each of the teachers.
+
+
 
 This is the old data:
 - Riccardo: 3 correct answers out of 6 questions
@@ -33,10 +75,72 @@ This is the new data:
 
 Guidance Tips
 
-1. There are at least two ways of assessing predictions.
+1. There are at least two ways of assessing predictions 
 2. Last year's results are this year's expectations.
-3. Are the parameter estimates changing? (way 1)
-4. How does the new data look in last year's predictive posterior? (way 2)
+3. Are the parameter estimates changing? (way 1 - using the posterior as a prior)
+4. How does the new data look in last year's predictive posterior? (way 2 - "calculating" the predictive posterior by means of samples and comparing it's predictions to the new data)
+
+We can look at the 
+
+```{r}
+#####      WAY 1    ########
+# OLD DATA 
+
+# grid approximation
+dens = 20 
+p_grid = seq(from = 0, to = 1, length.out = dens)
+# define the prior 
+prior = rep(1, dens) # flat (equal possibility for all outcomes)
+# prior2 = dnorm(p_grid, mean = 0.8, sd = 0.2)
+# Compute the likelihood at each value in grid
+R_likelihood <- dbinom( 3 , size=6 , prob=p_grid ) # first number how many 1's(corrects), second number how many possible 1's. 
+# Compute the posterior (likelihood by prior)
+R_unstd.posterior <- R_likelihood * prior
+# Standardize the posterior (so it sums to 1)
+R_posterior <- R_unstd.posterior / sum(R_unstd.posterior)
+# Draw the plot
+Data=data.frame(grid=p_grid,posterior=R_posterior,prior=prior,likelihood=R_likelihood)
+ggplot(Data,aes(grid,posterior))+  geom_point()+geom_line()+theme_classic()+  geom_line(aes(grid,prior/dens),color='red')+  xlab("probability of correct answer/knowledge of cogsci")+ ylab("posterior probability")
+
+# NEW DATA INCLUDED (USING THE OLD DATA AS A PRIOR)
+
+prior2 = R_posterior# dnorm(p_grid, mean = 0.8, sd = 0.2)
+# Compute the likelihood at each value in grid
+R_likelihood1 <- dbinom( 9 , size=10 , prob=p_grid ) # first number how many 1's(corrects), second number how many possible 1's. 
+# Compute the posterior (likelihood by prior)
+R_unstd.posterior1 <- R_likelihood1 * prior2
+# Standardize the posterior (so it sums to 1)
+R_posterior1 <- R_unstd.posterior1 / sum(R_unstd.posterior1)
+# Draw the plot
+Data=data.frame(grid=p_grid,posterior=R_posterior1,prior=prior2,likelihood=R_likelihood1)
+ggplot(Data,aes(grid,posterior))+  geom_point()+geom_line()+theme_classic()+  geom_line(aes(grid,prior),color='red')+  xlab("probability of correct answer/knowledge of cogsci")+ ylab("posterior probability")
+
+#####      WAY 2    ########
+#Identifying the most probable range of parameter values
+samples = sample(p_grid, prob = R_posterior, size = 1e4, replace = TRUE)
+plot(samples) 
+dens(samples)
+HPDI( samples , prob=0.5 ) 
+
+# We need to sample all possible p’s and then weight them (multiply them) with the posterior likelihood of each value of p. 
+c <- rbinom( 1e4 , size=10 , prob=samples) 
+dens(c)
+table(c)/1e4
+simplehist(c, xlab = "predicted correct answers based on simulations")
+# in this histogram we can see the predicted correct answers of Riccardo, with the most proberble scenario being that he answers 5/10 correct (though only with a probability of 15% as the distribution is so wide because he only answered 6 questions and therefore not enough to be more sure that he would answer half correct again). 
+
+
+
+```
+
+# feedback in class
+It can be a good model but not describe the phenomenon that is happening during the data collection /second test. could be that the first round answers were only due to a heavy previous coffee drinking for a teacher and if not the same scenario the next time - no caffeine, then it wont capture the same phenomenon that were in play the last time, and the model looks bad. 
+somehting - asses whether there is a statistical change /estimate if there is, if we find that one value between the confidence intercals and the mean of the model or somehting (middle og estimates)
+to camporae data- out it in a plot with the data of the number.
+difference: one new datapaint
+e.g. set on the parameters  until 
+1.diablrf
+
 
 
 ### Depending on time: Questions from the handbook
